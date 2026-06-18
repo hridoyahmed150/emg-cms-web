@@ -62,8 +62,21 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted/40 p-4">
       <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle className="text-2xl">EMG CMS</CardTitle>
+        <CardHeader className="items-center text-center">
+          {/* Light bg -> dark logo; dark bg -> white logo */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/emg-logo-light.svg"
+            alt="Everyday Media Group"
+            className="mb-2 h-8 w-auto dark:hidden"
+          />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/emg-logo.svg"
+            alt="Everyday Media Group"
+            className="mb-2 hidden h-8 w-auto dark:block"
+          />
+          <CardTitle className="text-xl">CMS Login</CardTitle>
           <CardDescription>Sign in to manage your content</CardDescription>
         </CardHeader>
         <CardContent>

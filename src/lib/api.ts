@@ -1,4 +1,5 @@
 import { getAccessToken, setAccessToken } from "./token-store";
+import { getActiveOrgId } from "./active-org";
 import type { User } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -23,7 +24,11 @@ async function rawFetch(path: string, options: RequestInit = {}, withAuth = true
     const token = getAccessToken();
     if (token) headers.set("Authorization", `Bearer ${token}`);
   }
-  return fetch(`${API_URL}${path}`, { ...options, headers, credentials: "include" });
+  // For SUPER_ADMIN viewing a specific org, scope every request via ?orgId.
+  // (The backend ignores this for non-super users — their org comes from the JWT.)
+  const orgId = getActiveOrgId();
+  const finalPath = orgId != null ? `${path}${path.includes("?") ? "&" : "?"}orgId=${orgId}` : path;
+  return fetch(`${API_URL}${finalPath}`, { ...options, headers, credentials: "include" });
 }
 
 /** Exchange the httpOnly refresh cookie for a fresh access token. */

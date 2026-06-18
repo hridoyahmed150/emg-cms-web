@@ -1,19 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
   Briefcase,
   Building2,
   KeyRound,
   LayoutDashboard,
-  LogOut,
   Send,
   Star,
   Users,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const baseNav = [
@@ -30,20 +28,17 @@ const superNav = [
 ];
 
 export function AppSidebar() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const pathname = usePathname();
-  const router = useRouter();
 
   const items = [...baseNav, ...(user?.role === "SUPER_ADMIN" ? superNav : [])];
 
-  async function handleLogout() {
-    await logout();
-    router.replace("/login");
-  }
-
   return (
-    <aside className="flex w-60 shrink-0 flex-col border-r bg-muted/30">
-      <div className="p-4 text-lg font-semibold">EMG CMS</div>
+    <aside className="flex w-60 shrink-0 flex-col bg-slate-900 text-slate-200">
+      <div className="p-4">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/emg-logo.svg" alt="Everyday Media Group" className="h-7 w-auto" />
+      </div>
       <nav className="flex-1 space-y-1 px-2">
         {items.map((it) => {
           const Icon = it.icon;
@@ -54,7 +49,9 @@ export function AppSidebar() {
               href={it.href}
               className={cn(
                 "flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
-                active ? "bg-primary text-primary-foreground" : "hover:bg-muted",
+                active
+                  ? "bg-primary text-primary-foreground"
+                  : "text-slate-300 hover:bg-white/10 hover:text-white",
               )}
             >
               <Icon className="h-4 w-4" />
@@ -63,14 +60,6 @@ export function AppSidebar() {
           );
         })}
       </nav>
-      <div className="border-t p-3">
-        <div className="mb-2 truncate text-xs text-muted-foreground">
-          {user?.name} · {user?.role}
-        </div>
-        <Button variant="outline" size="sm" className="w-full" onClick={handleLogout}>
-          <LogOut className="mr-2 h-4 w-4" /> Logout
-        </Button>
-      </div>
     </aside>
   );
 }

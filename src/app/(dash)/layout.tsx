@@ -3,7 +3,9 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { ActiveOrgProvider } from "@/lib/active-org-context";
 import { AppSidebar } from "@/components/app-sidebar";
+import { Topbar } from "@/components/topbar";
 
 export default function DashLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -22,9 +24,14 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
   }
 
   return (
-    <div className="flex min-h-screen">
-      <AppSidebar />
-      <main className="flex-1 overflow-x-hidden p-6">{children}</main>
-    </div>
+    <ActiveOrgProvider>
+      <div className="flex min-h-screen">
+        <AppSidebar />
+        <div className="flex flex-1 flex-col">
+          <Topbar />
+          <main className="flex-1 overflow-x-hidden p-6">{children}</main>
+        </div>
+      </div>
+    </ActiveOrgProvider>
   );
 }
