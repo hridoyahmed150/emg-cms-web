@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { selectClass } from "@/components/meta-fields";
-import type { Organization } from "@/lib/types";
+import type { Organization, ReviewsConfig } from "@/lib/types";
 
 function parseJson(label: string, val: string): unknown {
   try {
@@ -21,21 +21,58 @@ function parseJson(label: string, val: string): unknown {
 
 export function OrgForm({ org }: { org?: Organization }) {
   const router = useRouter();
+
+  // Split config: `reviews` is managed by the structured section below; the rest
+  // (buildHookUrl, cacheBustUrl, …) stays in the raw JSON textarea.
+  const initialConfig = (org?.config ?? {}) as Record<string, unknown>;
+  const { reviews: initialReviews, ...restConfig } = initialConfig;
+  const rv = (initialReviews ?? {}) as ReviewsConfig;
+
   const [slug, setSlug] = useState(org?.slug ?? "");
   const [name, setName] = useState(org?.name ?? "");
   const [deliveryTarget, setDeliveryTarget] = useState(org?.deliveryTarget ?? "ASTRO_PULL");
-  const [config, setConfig] = useState(JSON.stringify(org?.config ?? {}, null, 2));
+  const [config, setConfig] = useState(JSON.stringify(restConfig, null, 2));
   const [features, setFeatures] = useState(JSON.stringify(org?.features ?? { jobs: true, reviews: true }, null, 2));
   const [customFields, setCustomFields] = useState(JSON.stringify(org?.customFields ?? {}, null, 2));
+
+  // Structured reviews source.
+  const [rvSource, setRvSource] = useState<NonNullable<ReviewsConfig["source"]>>(rv.source ?? "manual");
+  const [rvPlaceId, setRvPlaceId] = useState(rv.placeId ?? "");
+  const [rvMapsUrl, setRvMapsUrl] = useState(rv.googleMapsUrl ?? "");
+  const [rvGbpAccount, setRvGbpAccount] = useState(rv.gbpAccountId ?? "");
+  const [rvGbpLocation, setRvGbpLocation] = useState(rv.gbpLocationId ?? "");
+  const [rvMinRating, setRvMinRating] = useState(String(rv.minRating ?? 5));
+  const [rvLimit, setRvLimit] = useState(String(rv.limit ?? 20));
+  const [rvSyncDays, setRvSyncDays] = useState(String(rv.syncEveryDays ?? 15));
+
   const [saving, setSaving] = useState(false);
+
+  function buildReviewsConfig(): Record<string, unknown> {
+    const reviews: Record<string, unknown> = {
+      source: rvSource,
+      minRating: Number(rvMinRating) || 5,
+      limit: Number(rvLimit) || 20,
+      syncEveryDays: Number(rvSyncDays) || 15,
+    };
+    if (rvPlaceId.trim()) reviews.placeId = rvPlaceId.trim();
+    if (rvMapsUrl.trim()) reviews.googleMapsUrl = rvMapsUrl.trim();
+    if (rvGbpAccount.trim()) reviews.gbpAccountId = rvGbpAccount.trim();
+    if (rvGbpLocation.trim()) reviews.gbpLocationId = rvGbpLocation.trim();
+    // Preserve server-managed values the form doesn't edit.
+    if (rv.lastRefreshedAt != null) reviews.lastRefreshedAt = rv.lastRefreshedAt;
+    const enc = (initialReviews as Record<string, unknown> | undefined)?.gbpRefreshTokenEncrypted;
+    if (enc) reviews.gbpRefreshTokenEncrypted = enc;
+    return reviews;
+  }
 
   async function submit() {
     setSaving(true);
     try {
+      const parsedConfig = parseJson("Config", config) as Record<string, unknown>;
       const body = {
         name,
         deliveryTarget,
-        config: parseJson("Config", config),
+        config: { ...parsedConfig, reviews: buildReviewsConfig() },
         features: parseJson("Features", features),
         customFields: parseJson("Custom fields", customFields),
       };
@@ -81,6 +118,74 @@ export function OrgForm({ org }: { org?: Organization }) {
         </select>
       </div>
 
+      {/* Structured reviews source */}
+      <div className="space-y-4 rounded-lg border bg-muted/20 p-4">
+        <div>
+          <p className="text-sm font-medium">Reviews source</p>
+          <p className="text-xs text-muted-foreground">
+            How this org&apos;s Google reviews are refreshed. Public feed shows {rvMinRating}★+ , latest {rvLimit}.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Source</Label>
+          <select
+            className={selectClass}
+            value={rvSource}
+            onChange={(e) => setRvSource(e.target.value as NonNullable<ReviewsConfig["source"]>)}
+          >
+            <option value="manual">manual — import / paste only</option>
+            <option value="places">places — Google Places API (≤5 per refresh)</option>
+            <option value="gbp">gbp — Google Business Profile (all reviews)</option>
+          </select>
+        </div>
+
+        {rvSource === "places" && (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Place ID</Label>
+              <Input placeholder="ChIJ…" value={rvPlaceId} onChange={(e) => setRvPlaceId(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Google Maps URL (optional)</Label>
+              <Input
+                placeholder="https://maps.app.goo.gl/…"
+                value={rvMapsUrl}
+                onChange={(e) => setRvMapsUrl(e.target.value)}
+              />
+            </div>
+          </div>
+        )}
+
+        {rvSource === "gbp" && (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>GBP account id</Label>
+              <Input value={rvGbpAccount} onChange={(e) => setRvGbpAccount(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>GBP location id</Label>
+              <Input value={rvGbpLocation} onChange={(e) => setRvGbpLocation(e.target.value)} />
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="space-y-2">
+            <Label>Min rating</Label>
+            <Input type="number" min={1} max={5} value={rvMinRating} onChange={(e) => setRvMinRating(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Display limit</Label>
+            <Input type="number" min={1} max={100} value={rvLimit} onChange={(e) => setRvLimit(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Refresh every (days)</Label>
+            <Input type="number" min={1} value={rvSyncDays} onChange={(e) => setRvSyncDays(e.target.value)} />
+          </div>
+        </div>
+      </div>
+
       <div className="space-y-2">
         <Label>Config (JSON)</Label>
         <Textarea
@@ -91,6 +196,7 @@ export function OrgForm({ org }: { org?: Organization }) {
         />
         <p className="text-xs text-muted-foreground">
           ASTRO_PULL: {`{ "buildHookUrl": "…" }`} · WORDPRESS_PULL: {`{ "siteUrl": "…", "cacheBustUrl": "…" }`}
+          {" · "}reviews is managed above.
         </p>
       </div>
 

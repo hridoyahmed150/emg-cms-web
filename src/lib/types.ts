@@ -21,6 +21,25 @@ export interface Organization {
   createdAt: string;
 }
 
+/** Per-organization Google reviews config, stored at `Organization.config.reviews`. */
+export interface ReviewsConfig {
+  source?: "manual" | "places" | "gbp";
+  placeId?: string;
+  googleMapsUrl?: string;
+  gbpAccountId?: string;
+  gbpLocationId?: string;
+  minRating?: number;
+  limit?: number;
+  syncEveryDays?: number;
+  lastRefreshedAt?: number;
+}
+
+/** Read `config.reviews` off an organization (config is loosely typed JSON). */
+export function getReviewsConfig(org?: Organization | null): ReviewsConfig {
+  const reviews = (org?.config as Record<string, unknown> | undefined)?.reviews;
+  return reviews && typeof reviews === "object" ? (reviews as ReviewsConfig) : {};
+}
+
 export type FieldType = "string" | "number" | "boolean" | "enum" | "url";
 export interface FieldDef {
   key: string;

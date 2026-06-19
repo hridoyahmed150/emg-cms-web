@@ -34,12 +34,15 @@ export function AppSidebar() {
   const items = [...baseNav, ...(user?.role === "SUPER_ADMIN" ? superNav : [])];
 
   return (
-    <aside className="flex w-60 shrink-0 flex-col bg-slate-900 text-slate-200">
-      <div className="p-4">
+    <aside className="flex w-60 shrink-0 flex-col border-r bg-card">
+      <div className="border-b p-4">
+        {/* Light bg -> dark logo; dark bg -> white logo */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/emg-logo.svg" alt="Everyday Media Group" className="h-7 w-auto" />
+        <img src="/emg-logo-light.svg" alt="Everyday Media Group" className="h-7 w-auto dark:hidden" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/emg-logo.svg" alt="Everyday Media Group" className="hidden h-7 w-auto dark:block" />
       </div>
-      <nav className="flex-1 space-y-1 px-2">
+      <nav className="flex-1 space-y-1 p-3">
         {items.map((it) => {
           const Icon = it.icon;
           const active = pathname === it.href || pathname.startsWith(`${it.href}/`);
@@ -48,13 +51,13 @@ export function AppSidebar() {
               key={it.href}
               href={it.href}
               className={cn(
-                "flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
+                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                 active
                   ? "bg-primary text-primary-foreground"
-                  : "text-slate-300 hover:bg-white/10 hover:text-white",
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
             >
-              <Icon className="h-4 w-4" />
+              <Icon className="size-4 shrink-0" />
               {it.label}
             </Link>
           );

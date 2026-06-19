@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, RefreshCw, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { api, ApiError } from "@/lib/api";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Table,
   TableBody,
@@ -15,11 +16,35 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { Paginated, Review } from "@/lib/types";
+import { useActiveOrg } from "@/lib/active-org-context";
+import { getReviewsConfig, type Paginated, type Review, type ReviewsConfig } from "@/lib/types";
+
+type ImportResult = { received: number; inserted: number; skipped: number };
+
+const IMPORT_PLACEHOLDER = `[
+  { "name": "Jane D.", "rating": 5, "text": "Fantastic service!", "time": "2026-06-10", "externalId": "g-abc123" }
+]`;
+
+// Module-level (not called during component render) so Date.now stays out of render.
+function refreshStatus(rc: ReviewsConfig): { daysSince: number | null; due: boolean; every: number } {
+  const every = rc.syncEveryDays ?? 15;
+  const daysSince =
+    rc.lastRefreshedAt != null ? Math.floor((Date.now() - rc.lastRefreshedAt) / 86_400_000) : null;
+  return { daysSince, due: daysSince == null || daysSince >= every, every };
+}
 
 export default function ReviewsPage() {
+  const { activeOrg } = useActiveOrg();
+  const rc = getReviewsConfig(activeOrg);
+  const { daysSince, due: dueForRefresh, every: syncEveryDays } = refreshStatus(rc);
+  const canAutoRefresh = rc.source === "places" || rc.source === "gbp";
+
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [importing, setImporting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -48,14 +73,106 @@ export default function ReviewsPage() {
     }
   }
 
+  async function refreshFromGoogle() {
+    setRefreshing(true);
+    try {
+      const r = await api.post<ImportResult>("/api/v1/reviews/refresh");
+      toast.success(`Refreshed: ${r.inserted} new, ${r.skipped} already had`);
+      await load();
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "Refresh failed");
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  async function runImport() {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(importText);
+    } catch {
+      toast.error("That isn't valid JSON.");
+      return;
+    }
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      toast.error("Paste a non-empty JSON array of reviews.");
+      return;
+    }
+    setImporting(true);
+    try {
+      const r = await api.post<ImportResult>("/api/v1/reviews/import", { reviews: parsed });
+      toast.success(`Imported: ${r.inserted} new, ${r.skipped} duplicate`);
+      setImportText("");
+      setShowImport(false);
+      await load();
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "Import failed");
+    } finally {
+      setImporting(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Reviews</h1>
-        <Link href="/reviews/new" className={buttonVariants()}>
-          <Plus className="mr-2 size-4" /> New Review
-        </Link>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">Reviews</h1>
+          <p className="text-sm text-muted-foreground">
+            {rc.lastRefreshedAt != null
+              ? `Last refreshed ${daysSince === 0 ? "today" : `${daysSince} day${daysSince === 1 ? "" : "s"} ago`}`
+              : "Never refreshed"}
+            {" · "}
+            {dueForRefresh ? (
+              <Badge variant="destructive">Refresh due</Badge>
+            ) : (
+              <span className="text-muted-foreground">next due in {syncEveryDays - (daysSince ?? 0)} days</span>
+            )}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {canAutoRefresh && (
+            <Button variant="outline" onClick={refreshFromGoogle} disabled={refreshing}>
+              <RefreshCw className={`mr-2 size-4 ${refreshing ? "animate-spin" : ""}`} />
+              {refreshing ? "Refreshing…" : "Refresh from Google"}
+            </Button>
+          )}
+          <Button variant="outline" onClick={() => setShowImport((v) => !v)}>
+            <Upload className="mr-2 size-4" /> Import
+          </Button>
+          <Link href="/reviews/new" className={buttonVariants()}>
+            <Plus className="mr-2 size-4" /> New Review
+          </Link>
+        </div>
       </div>
+
+      {showImport && (
+        <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
+          <div>
+            <p className="text-sm font-medium">Bulk import reviews</p>
+            <p className="text-xs text-muted-foreground">
+              Paste a JSON array. Re-importing the full list is safe — duplicates are skipped (by{" "}
+              <code>externalId</code>, or name+time+text). Fields: <code>name</code>, <code>rating</code> (1–5),{" "}
+              <code>text</code>, <code>time</code> (date or unix ms), optional <code>avatar</code>,{" "}
+              <code>reviewUrl</code>, <code>externalId</code>.
+            </p>
+          </div>
+          <Textarea
+            rows={8}
+            className="font-mono text-xs"
+            placeholder={IMPORT_PLACEHOLDER}
+            value={importText}
+            onChange={(e) => setImportText(e.target.value)}
+          />
+          <div className="flex gap-2">
+            <Button onClick={runImport} disabled={importing}>
+              {importing ? "Importing…" : "Import"}
+            </Button>
+            <Button variant="ghost" onClick={() => setShowImport(false)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
 
       <div className="rounded-lg border">
         <Table>
