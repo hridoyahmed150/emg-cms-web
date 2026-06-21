@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { api, ApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { PublishButton } from "@/components/publish-button";
 import {
   Table,
   TableBody,
@@ -54,14 +55,18 @@ export default function DeliveryPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">Delivery</h1>
-        <Button variant="outline" onClick={() => void load()}>
-          <RefreshCw className="mr-2 size-4" /> Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <PublishButton />
+          <Button variant="outline" onClick={() => void load()}>
+            <RefreshCw className="mr-2 size-4" /> Refresh
+          </Button>
+        </div>
       </div>
       <p className="-mt-2 text-sm text-muted-foreground">
-        Rebuild / cache-bust jobs triggered when content changes.
+        Content edits don&apos;t rebuild the site automatically — click <strong>Publish to site</strong> to
+        trigger one rebuild / cache-bust. The jobs below show each publish&apos;s status.
       </p>
 
       <div className="rounded-lg border">

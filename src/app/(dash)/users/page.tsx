@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Copy, Trash2, UserPlus } from "lucide-react";
+import { Check, Copy, ShieldCheck, Trash2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { api, ApiError } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -16,14 +17,28 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { selectClass } from "@/components/meta-fields";
-import type { Organization, Role, User } from "@/lib/types";
+import type { Organization, PermissionsMeta, Role, User } from "@/lib/types";
 
 type ApiUser = User & { createdAt: string };
 
+function formatDate(iso?: string | null) {
+  if (!iso) return "Never";
+  return new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
 export default function UsersPage() {
+  const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<ApiUser[]>([]);
   const [orgs, setOrgs] = useState<Organization[]>([]);
+  const [perms, setPerms] = useState<PermissionsMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
@@ -31,16 +46,19 @@ export default function UsersPage() {
   const [orgId, setOrgId] = useState("");
   const [creating, setCreating] = useState(false);
   const [tempPassword, setTempPassword] = useState<string | null>(null);
+  const [permsFor, setPermsFor] = useState<ApiUser | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [u, o] = await Promise.all([
+      const [u, o, p] = await Promise.all([
         api.get<ApiUser[]>("/api/v1/users"),
         api.get<Organization[]>("/api/v1/organizations"),
+        api.get<PermissionsMeta>("/api/v1/meta/permissions"),
       ]);
       setUsers(u);
       setOrgs(o);
+      setPerms(p);
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "Failed to load users");
     } finally {
@@ -49,17 +67,29 @@ export default function UsersPage() {
   }, []);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (currentUser?.role === "SUPER_ADMIN") void load();
+    else setLoading(false);
+  }, [load, currentUser]);
 
   useEffect(() => {
     if (!orgId && orgs.length) setOrgId(String(orgs[0]!.id));
   }, [orgs, orgId]);
 
+  // User management is super-admin-only — match the backend (requireSuperAdmin).
+  if (currentUser && currentUser.role !== "SUPER_ADMIN") {
+    return (
+      <div className="space-y-2">
+        <h1 className="text-2xl font-semibold">Users</h1>
+        <p className="text-muted-foreground">User management is available to super admins only.</p>
+      </div>
+    );
+  }
+
   const orgName = (id: number | null) => orgs.find((o) => o.id === id)?.name ?? "—";
 
   async function invite() {
     if (!email.trim() || !name.trim()) return toast.error("Email and name are required");
+    if (role !== "SUPER_ADMIN" && !orgId) return toast.error("Select an organization for this user");
     setCreating(true);
     try {
       const body: Record<string, unknown> = { email, name, role };
@@ -117,6 +147,10 @@ export default function UsersPage() {
               ))}
             </select>
           </div>
+          <p className="text-xs text-muted-foreground">
+            Only super admins can create users and choose the organization. A strong temporary password
+            is generated if you leave it blank.
+          </p>
           <Button onClick={invite} disabled={creating}>
             <UserPlus className="mr-2 size-4" /> {creating ? "Inviting…" : "Invite user"}
           </Button>
@@ -150,13 +184,14 @@ export default function UsersPage() {
               <TableHead>Email</TableHead>
               <TableHead>Role</TableHead>
               <TableHead>Organization</TableHead>
-              <TableHead className="w-16 text-right">Delete</TableHead>
+              <TableHead>Last login</TableHead>
+              <TableHead className="w-28 text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
                   Loading…
                 </TableCell>
               </TableRow>
@@ -169,7 +204,17 @@ export default function UsersPage() {
                     <Badge variant={u.role === "SUPER_ADMIN" ? "default" : "secondary"}>{u.role}</Badge>
                   </TableCell>
                   <TableCell>{orgName(u.organizationId)}</TableCell>
+                  <TableCell className="text-muted-foreground">{formatDate(u.lastLoginAt)}</TableCell>
                   <TableCell className="text-right">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="View permissions"
+                      title="View permissions"
+                      onClick={() => setPermsFor(u)}
+                    >
+                      <ShieldCheck className="size-4" />
+                    </Button>
                     <Button variant="ghost" size="icon" aria-label="Delete" onClick={() => remove(u.id)}>
                       <Trash2 className="size-4" />
                     </Button>
@@ -180,6 +225,76 @@ export default function UsersPage() {
           </TableBody>
         </Table>
       </div>
+
+      <PermissionsDialog user={permsFor} perms={perms} onClose={() => setPermsFor(null)} />
     </div>
+  );
+}
+
+function PermissionsDialog({
+  user,
+  perms,
+  onClose,
+}: {
+  user: ApiUser | null;
+  perms: PermissionsMeta | null;
+  onClose: () => void;
+}) {
+  const rolePerms = user && perms ? (perms.roles[user.role] ?? []) : [];
+  const isFullAccess = rolePerms.includes("*");
+  const granted = new Set(rolePerms);
+
+  // Group the catalog for display.
+  const groups: Record<string, { key: string; label: string }[]> = {};
+  for (const c of perms?.catalog ?? []) {
+    (groups[c.group] ??= []).push({ key: c.key, label: c.label });
+  }
+
+  return (
+    <Dialog open={user != null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Permissions — {user?.name}</DialogTitle>
+          <DialogDescription>
+            Derived from the role <span className="font-medium">{user?.role}</span>. Read-only for now.
+          </DialogDescription>
+        </DialogHeader>
+
+        {isFullAccess ? (
+          <div className="rounded-lg border border-primary/40 bg-primary/5 p-3 text-sm">
+            <span className="font-medium">Full access</span> — this super admin has every permission (
+            <code>*</code>).
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {Object.entries(groups).map(([group, items]) => (
+              <div key={group}>
+                <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {group}
+                </p>
+                <ul className="space-y-1">
+                  {items.map((it) => {
+                    const on = granted.has(it.key);
+                    return (
+                      <li
+                        key={it.key}
+                        className={`flex items-center gap-2 text-sm ${on ? "" : "text-muted-foreground/50"}`}
+                      >
+                        {on ? (
+                          <Check className="size-4 shrink-0 text-green-600" />
+                        ) : (
+                          <span className="inline-block size-4 shrink-0 text-center">—</span>
+                        )}
+                        {it.label}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

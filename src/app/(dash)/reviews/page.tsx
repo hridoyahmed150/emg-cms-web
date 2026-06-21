@@ -17,6 +17,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useActiveOrg } from "@/lib/active-org-context";
+import { PublishButton } from "@/components/publish-button";
 import { getReviewsConfig, type Paginated, type Review, type ReviewsConfig } from "@/lib/types";
 
 type ImportResult = { received: number; inserted: number; skipped: number };
@@ -129,7 +130,8 @@ export default function ReviewsPage() {
             )}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <PublishButton />
           {canAutoRefresh && (
             <Button variant="outline" onClick={refreshFromGoogle} disabled={refreshing}>
               <RefreshCw className={`mr-2 size-4 ${refreshing ? "animate-spin" : ""}`} />

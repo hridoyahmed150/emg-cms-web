@@ -7,7 +7,19 @@ export interface User {
   name: string;
   role: Role;
   organizationId: number | null;
+  lastLoginAt?: string | null;
   createdAt?: string;
+}
+
+/** Read-only permission metadata from GET /api/v1/meta/permissions. */
+export interface PermissionInfo {
+  key: string;
+  label: string;
+  group: string;
+}
+export interface PermissionsMeta {
+  roles: Record<Role, string[]>;
+  catalog: PermissionInfo[];
 }
 
 export interface Organization {
@@ -38,6 +50,33 @@ export interface ReviewsConfig {
 export function getReviewsConfig(org?: Organization | null): ReviewsConfig {
   const reviews = (org?.config as Record<string, unknown> | undefined)?.reviews;
   return reviews && typeof reviews === "object" ? (reviews as ReviewsConfig) : {};
+}
+
+/** Publish state stored at `Organization.config.delivery` (drives "unpublished changes"). */
+export interface DeliveryConfig {
+  lastContentChangeAt?: number;
+  lastPublishedAt?: number;
+}
+
+export function getDeliveryConfig(org?: Organization | null): DeliveryConfig {
+  const d = (org?.config as Record<string, unknown> | undefined)?.delivery;
+  return d && typeof d === "object" ? (d as DeliveryConfig) : {};
+}
+
+/** True when content changed after the last publish (i.e. site is out of date). */
+export function hasUnpublishedChanges(org?: Organization | null): boolean {
+  const d = getDeliveryConfig(org);
+  return (d.lastContentChangeAt ?? 0) > (d.lastPublishedAt ?? 0);
+}
+
+/**
+ * Whether an org has a module (jobs/reviews/…) enabled. ENABLED unless explicitly set
+ * to false, so legacy orgs (and a null/unknown org) default to on. Mirrors the API's
+ * requireFeature guard.
+ */
+export function isFeatureEnabled(org: Organization | null | undefined, feature: string): boolean {
+  const features = (org?.features ?? {}) as Record<string, boolean>;
+  return features[feature] !== false;
 }
 
 export type FieldType = "string" | "number" | "boolean" | "enum" | "url";

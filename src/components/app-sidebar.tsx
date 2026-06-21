@@ -12,14 +12,14 @@ import {
   Users,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { useActiveOrg } from "@/lib/active-org-context";
+import { isFeatureEnabled } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const baseNav = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/jobs", label: "Jobs", icon: Briefcase },
-  { href: "/reviews", label: "Reviews", icon: Star },
-  { href: "/api-tokens", label: "API Tokens", icon: KeyRound },
-  { href: "/delivery", label: "Delivery", icon: Send },
+// Content modules — shown only when the active org has the feature enabled.
+const contentNav = [
+  { href: "/jobs", label: "Jobs", icon: Briefcase, feature: "jobs" },
+  { href: "/reviews", label: "Reviews", icon: Star, feature: "reviews" },
 ];
 
 const superNav = [
@@ -29,9 +29,16 @@ const superNav = [
 
 export function AppSidebar() {
   const { user } = useAuth();
+  const { activeOrg } = useActiveOrg();
   const pathname = usePathname();
 
-  const items = [...baseNav, ...(user?.role === "SUPER_ADMIN" ? superNav : [])];
+  const items = [
+    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    ...contentNav.filter((n) => isFeatureEnabled(activeOrg, n.feature)),
+    { href: "/api-tokens", label: "API Tokens", icon: KeyRound },
+    { href: "/delivery", label: "Delivery", icon: Send },
+    ...(user?.role === "SUPER_ADMIN" ? superNav : []),
+  ];
 
   return (
     <aside className="flex w-60 shrink-0 flex-col border-r bg-card">

@@ -8,8 +8,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { selectClass } from "@/components/meta-fields";
 import type { Organization, ReviewsConfig } from "@/lib/types";
+
+// Modules this org can use; unchecked → hidden from the dashboard + blocked in the API.
+const FEATURE_MODULES = [
+  { key: "jobs", label: "Jobs" },
+  { key: "reviews", label: "Reviews" },
+];
 
 function parseJson(label: string, val: string): unknown {
   try {
@@ -32,7 +39,9 @@ export function OrgForm({ org }: { org?: Organization }) {
   const [name, setName] = useState(org?.name ?? "");
   const [deliveryTarget, setDeliveryTarget] = useState(org?.deliveryTarget ?? "ASTRO_PULL");
   const [config, setConfig] = useState(JSON.stringify(restConfig, null, 2));
-  const [features, setFeatures] = useState(JSON.stringify(org?.features ?? { jobs: true, reviews: true }, null, 2));
+  const [features, setFeatures] = useState<Record<string, boolean>>(
+    (org?.features as Record<string, boolean> | undefined) ?? { jobs: true, reviews: true },
+  );
   const [customFields, setCustomFields] = useState(JSON.stringify(org?.customFields ?? {}, null, 2));
 
   // Structured reviews source.
@@ -73,7 +82,7 @@ export function OrgForm({ org }: { org?: Organization }) {
         name,
         deliveryTarget,
         config: { ...parsedConfig, reviews: buildReviewsConfig() },
-        features: parseJson("Features", features),
+        features,
         customFields: parseJson("Custom fields", customFields),
       };
       if (org) await api.patch(`/api/v1/organizations/${org.id}`, body);
@@ -201,13 +210,21 @@ export function OrgForm({ org }: { org?: Organization }) {
       </div>
 
       <div className="space-y-2">
-        <Label>Features (JSON)</Label>
-        <Textarea
-          rows={3}
-          className="font-mono text-xs"
-          value={features}
-          onChange={(e) => setFeatures(e.target.value)}
-        />
+        <Label>Modules</Label>
+        <div className="flex flex-wrap gap-5 rounded-lg border p-3">
+          {FEATURE_MODULES.map((m) => (
+            <label key={m.key} className="flex cursor-pointer items-center gap-2 text-sm">
+              <Checkbox
+                checked={features[m.key] !== false}
+                onCheckedChange={(v) => setFeatures((f) => ({ ...f, [m.key]: v === true }))}
+              />
+              {m.label}
+            </label>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Unchecked modules are hidden from this org&apos;s dashboard menu and blocked in the API.
+        </p>
       </div>
 
       <div className="space-y-2">
