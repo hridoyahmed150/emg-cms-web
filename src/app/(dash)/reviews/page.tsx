@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Pencil, Plus, RefreshCw, Trash2, Upload } from "lucide-react";
+import { GitBranch, Pencil, Plus, RefreshCw, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { api, ApiError } from "@/lib/api";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -18,9 +18,9 @@ import {
 } from "@/components/ui/table";
 import { useActiveOrg } from "@/lib/active-org-context";
 import { PublishButton } from "@/components/publish-button";
-import { getReviewsConfig, type Paginated, type Review, type ReviewsConfig } from "@/lib/types";
+import { getGitConfig, getReviewsConfig, type Paginated, type Review, type ReviewsConfig } from "@/lib/types";
 
-type ImportResult = { received: number; inserted: number; skipped: number };
+type ImportResult = { received: number; inserted: number; skipped: number; note?: string };
 
 const IMPORT_PLACEHOLDER = `[
   { "name": "Jane D.", "rating": 5, "text": "Fantastic service!", "time": "2026-06-10", "externalId": "g-abc123" }
@@ -39,10 +39,13 @@ export default function ReviewsPage() {
   const rc = getReviewsConfig(activeOrg);
   const { daysSince, due: dueForRefresh, every: syncEveryDays } = refreshStatus(rc);
   const canAutoRefresh = rc.source === "places" || rc.source === "gbp";
+  // Reverse-import is only meaningful for Astro/CloudCannon orgs that have a repo configured.
+  const canRepoImport = activeOrg?.deliveryTarget === "ASTRO_PULL" && !!getGitConfig(activeOrg).repo;
 
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [repoImporting, setRepoImporting] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [importText, setImportText] = useState("");
   const [importing, setImporting] = useState(false);
@@ -84,6 +87,25 @@ export default function ReviewsPage() {
       toast.error(e instanceof ApiError ? e.message : "Refresh failed");
     } finally {
       setRefreshing(false);
+    }
+  }
+
+  async function importFromRepo() {
+    if (
+      !window.confirm(
+        "Import the repo's existing reviews.json into the CMS?\n\nBest done during onboarding — before refreshing from Google or publishing — so pre-existing reviews aren't overwritten. Duplicates are skipped.",
+      )
+    )
+      return;
+    setRepoImporting(true);
+    try {
+      const r = await api.post<ImportResult>("/api/v1/reviews/import-from-repo");
+      toast.success(r.note ?? `Imported from repo: ${r.inserted} new, ${r.skipped} duplicate`);
+      await load();
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "Repo import failed");
+    } finally {
+      setRepoImporting(false);
     }
   }
 
@@ -136,6 +158,12 @@ export default function ReviewsPage() {
             <Button variant="outline" onClick={refreshFromGoogle} disabled={refreshing}>
               <RefreshCw className={`mr-2 size-4 ${refreshing ? "animate-spin" : ""}`} />
               {refreshing ? "Refreshing…" : "Refresh from Google"}
+            </Button>
+          )}
+          {canRepoImport && (
+            <Button variant="outline" onClick={importFromRepo} disabled={repoImporting}>
+              <GitBranch className="mr-2 size-4" />
+              {repoImporting ? "Importing…" : "Import from repo"}
             </Button>
           )}
           <Button variant="outline" onClick={() => setShowImport((v) => !v)}>

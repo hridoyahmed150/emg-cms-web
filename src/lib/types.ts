@@ -52,6 +52,18 @@ export function getReviewsConfig(org?: Organization | null): ReviewsConfig {
   return reviews && typeof reviews === "object" ? (reviews as ReviewsConfig) : {};
 }
 
+/** Astro publish target stored at `Organization.config.git` (Bitbucket repo for commit-on-publish). */
+export interface GitConfig {
+  repo?: string;
+  branch?: string;
+  path?: string;
+}
+
+export function getGitConfig(org?: Organization | null): GitConfig {
+  const git = (org?.config as Record<string, unknown> | undefined)?.git;
+  return git && typeof git === "object" ? (git as GitConfig) : {};
+}
+
 /** Publish state stored at `Organization.config.delivery` (drives "unpublished changes"). */
 export interface DeliveryConfig {
   lastContentChangeAt?: number;
