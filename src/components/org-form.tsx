@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { api, ApiError } from "@/lib/api";
+import { useActiveOrg } from "@/lib/active-org-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -28,6 +29,7 @@ function parseJson(label: string, val: string): unknown {
 
 export function OrgForm({ org }: { org?: Organization }) {
   const router = useRouter();
+  const { refreshOrgs } = useActiveOrg();
 
   // Split config: `reviews` is managed by the structured section below; the rest
   // (buildHookUrl, cacheBustUrl, …) stays in the raw JSON textarea.
@@ -88,6 +90,7 @@ export function OrgForm({ org }: { org?: Organization }) {
       if (org) await api.patch(`/api/v1/organizations/${org.id}`, body);
       else await api.post("/api/v1/organizations", { ...body, slug });
       toast.success(org ? "Organization updated" : "Organization created");
+      await refreshOrgs(); // update the Topbar switcher list without a full reload
       router.push("/organizations");
       router.refresh();
     } catch (e) {
