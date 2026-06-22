@@ -56,7 +56,8 @@ export function getReviewsConfig(org?: Organization | null): ReviewsConfig {
 export interface GitConfig {
   repo?: string;
   branch?: string;
-  path?: string;
+  path?: string; // reviews.json repo path
+  jobsPath?: string; // jobs.json repo path
 }
 
 export function getGitConfig(org?: Organization | null): GitConfig {

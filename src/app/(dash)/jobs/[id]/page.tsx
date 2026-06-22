@@ -23,7 +23,7 @@ export default function EditJobPage() {
   if (!job) return <div className="text-muted-foreground">Job not found.</div>;
 
   return (
-    <div className="space-y-4">
+    <div className="mx-auto max-w-2xl space-y-4">
       <h1 className="text-2xl font-semibold">Edit Job</h1>
       <JobForm job={job} />
     </div>

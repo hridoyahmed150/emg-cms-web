@@ -23,7 +23,7 @@ export default function EditReviewPage() {
   if (!review) return <div className="text-muted-foreground">Review not found.</div>;
 
   return (
-    <div className="space-y-4">
+    <div className="mx-auto max-w-2xl space-y-4">
       <h1 className="text-2xl font-semibold">Edit Review</h1>
       <ReviewForm review={review} />
     </div>

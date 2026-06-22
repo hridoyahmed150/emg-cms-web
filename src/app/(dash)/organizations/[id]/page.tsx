@@ -23,7 +23,7 @@ export default function EditOrganizationPage() {
   if (!org) return <div className="text-muted-foreground">Organization not found.</div>;
 
   return (
-    <div className="space-y-4">
+    <div className="mx-auto max-w-2xl space-y-4">
       <h1 className="text-2xl font-semibold">Edit Organization</h1>
       <OrgForm org={org} />
     </div>

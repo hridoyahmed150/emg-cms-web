@@ -36,7 +36,7 @@ export function OrgForm({ org }: { org?: Organization }) {
   const initialConfig = (org?.config ?? {}) as Record<string, unknown>;
   const { reviews: initialReviews, git: initialGit, ...restConfig } = initialConfig;
   const rv = (initialReviews ?? {}) as ReviewsConfig;
-  const gitCfg = (initialGit ?? {}) as { repo?: string; branch?: string; path?: string };
+  const gitCfg = (initialGit ?? {}) as { repo?: string; branch?: string; path?: string; jobsPath?: string };
 
   const [slug, setSlug] = useState(org?.slug ?? "");
   const [name, setName] = useState(org?.name ?? "");
@@ -62,6 +62,7 @@ export function OrgForm({ org }: { org?: Organization }) {
   const [gitRepo, setGitRepo] = useState(gitCfg.repo ?? "");
   const [gitBranch, setGitBranch] = useState(gitCfg.branch ?? "main");
   const [gitPath, setGitPath] = useState(gitCfg.path ?? "src/data/reviews.json");
+  const [gitJobsPath, setGitJobsPath] = useState(gitCfg.jobsPath ?? "");
 
   const [saving, setSaving] = useState(false);
 
@@ -84,13 +85,17 @@ export function OrgForm({ org }: { org?: Organization }) {
   }
 
   // Astro git target — only persisted when a repo slug is set (ASTRO_PULL only).
+  // Each path is optional: set only the collections this repo should receive. Leaving
+  // the reviews path empty means Publish won't touch reviews.json (e.g. a jobs-only site).
   function buildGitConfig(): Record<string, unknown> | undefined {
     if (!gitRepo.trim()) return undefined;
-    return {
+    const git: Record<string, unknown> = {
       repo: gitRepo.trim(),
       branch: gitBranch.trim() || "main",
-      path: gitPath.trim() || "src/data/reviews.json",
     };
+    if (gitPath.trim()) git.path = gitPath.trim();
+    if (gitJobsPath.trim()) git.jobsPath = gitJobsPath.trim();
+    return git;
   }
 
   async function submit() {
@@ -119,7 +124,7 @@ export function OrgForm({ org }: { org?: Organization }) {
   }
 
   return (
-    <div className="max-w-2xl space-y-4">
+    <div className="space-y-5 rounded-xl border bg-card p-6 shadow-sm">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label>Slug</Label>
@@ -154,25 +159,34 @@ export function OrgForm({ org }: { org?: Organization }) {
           <div>
             <p className="text-sm font-medium">Astro publish target (Bitbucket repo)</p>
             <p className="text-xs text-muted-foreground">
-              On “Publish to site” the CMS commits the data file to this repo; the commit triggers a CloudCannon
-              build. Requires BITBUCKET_* credentials on the API server.
+              On “Publish to site” the CMS commits the data file(s) to this repo; the commit triggers a CloudCannon
+              build. Set only the paths this repo should receive — leave a path empty to skip that collection
+              (e.g. a jobs-only site leaves Reviews path blank). Requires BITBUCKET_* credentials on the API server.
             </p>
           </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Repo slug</Label>
-              <Input placeholder="housefx" value={gitRepo} onChange={(e) => setGitRepo(e.target.value)} />
+              <Input placeholder="eistx" value={gitRepo} onChange={(e) => setGitRepo(e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label>Branch</Label>
               <Input placeholder="main" value={gitBranch} onChange={(e) => setGitBranch(e.target.value)} />
             </div>
             <div className="space-y-2">
-              <Label>File path</Label>
+              <Label>Reviews file path</Label>
               <Input
                 placeholder="src/data/reviews.json"
                 value={gitPath}
                 onChange={(e) => setGitPath(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Jobs file path</Label>
+              <Input
+                placeholder="src/data/jobs.json"
+                value={gitJobsPath}
+                onChange={(e) => setGitJobsPath(e.target.value)}
               />
             </div>
           </div>
