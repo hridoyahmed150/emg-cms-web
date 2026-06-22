@@ -34,8 +34,9 @@ export function OrgForm({ org }: { org?: Organization }) {
   // Split config: `reviews` is managed by the structured section below; the rest
   // (buildHookUrl, cacheBustUrl, …) stays in the raw JSON textarea.
   const initialConfig = (org?.config ?? {}) as Record<string, unknown>;
-  const { reviews: initialReviews, ...restConfig } = initialConfig;
+  const { reviews: initialReviews, git: initialGit, ...restConfig } = initialConfig;
   const rv = (initialReviews ?? {}) as ReviewsConfig;
+  const gitCfg = (initialGit ?? {}) as { repo?: string; branch?: string; path?: string };
 
   const [slug, setSlug] = useState(org?.slug ?? "");
   const [name, setName] = useState(org?.name ?? "");
@@ -55,6 +56,12 @@ export function OrgForm({ org }: { org?: Organization }) {
   const [rvMinRating, setRvMinRating] = useState(String(rv.minRating ?? 5));
   const [rvLimit, setRvLimit] = useState(String(rv.limit ?? 20));
   const [rvSyncDays, setRvSyncDays] = useState(String(rv.syncEveryDays ?? 15));
+
+  // Structured Astro publish target (git commit-on-publish): Publish commits the
+  // data file to this Bitbucket repo, and the commit triggers a CloudCannon build.
+  const [gitRepo, setGitRepo] = useState(gitCfg.repo ?? "");
+  const [gitBranch, setGitBranch] = useState(gitCfg.branch ?? "main");
+  const [gitPath, setGitPath] = useState(gitCfg.path ?? "src/data/reviews.json");
 
   const [saving, setSaving] = useState(false);
 
@@ -76,14 +83,25 @@ export function OrgForm({ org }: { org?: Organization }) {
     return reviews;
   }
 
+  // Astro git target — only persisted when a repo slug is set (ASTRO_PULL only).
+  function buildGitConfig(): Record<string, unknown> | undefined {
+    if (!gitRepo.trim()) return undefined;
+    return {
+      repo: gitRepo.trim(),
+      branch: gitBranch.trim() || "main",
+      path: gitPath.trim() || "src/data/reviews.json",
+    };
+  }
+
   async function submit() {
     setSaving(true);
     try {
       const parsedConfig = parseJson("Config", config) as Record<string, unknown>;
+      const git = deliveryTarget === "ASTRO_PULL" ? buildGitConfig() : undefined;
       const body = {
         name,
         deliveryTarget,
-        config: { ...parsedConfig, reviews: buildReviewsConfig() },
+        config: { ...parsedConfig, reviews: buildReviewsConfig(), ...(git ? { git } : {}) },
         features,
         customFields: parseJson("Custom fields", customFields),
       };
@@ -129,6 +147,37 @@ export function OrgForm({ org }: { org?: Organization }) {
           <option value="WORDPRESS_PULL">WORDPRESS_PULL</option>
         </select>
       </div>
+
+      {/* Structured Astro publish target — shown only for ASTRO_PULL */}
+      {deliveryTarget === "ASTRO_PULL" && (
+        <div className="space-y-4 rounded-lg border bg-muted/20 p-4">
+          <div>
+            <p className="text-sm font-medium">Astro publish target (Bitbucket repo)</p>
+            <p className="text-xs text-muted-foreground">
+              On “Publish to site” the CMS commits the data file to this repo; the commit triggers a CloudCannon
+              build. Requires BITBUCKET_* credentials on the API server.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="space-y-2">
+              <Label>Repo slug</Label>
+              <Input placeholder="housefx" value={gitRepo} onChange={(e) => setGitRepo(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Branch</Label>
+              <Input placeholder="main" value={gitBranch} onChange={(e) => setGitBranch(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>File path</Label>
+              <Input
+                placeholder="src/data/reviews.json"
+                value={gitPath}
+                onChange={(e) => setGitPath(e.target.value)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Structured reviews source */}
       <div className="space-y-4 rounded-lg border bg-muted/20 p-4">
@@ -207,8 +256,8 @@ export function OrgForm({ org }: { org?: Organization }) {
           onChange={(e) => setConfig(e.target.value)}
         />
         <p className="text-xs text-muted-foreground">
-          ASTRO_PULL: {`{ "buildHookUrl": "…" }`} · WORDPRESS_PULL: {`{ "siteUrl": "…", "cacheBustUrl": "…" }`}
-          {" · "}reviews is managed above.
+          ASTRO_PULL: git target managed above · WORDPRESS_PULL: {`{ "siteUrl": "…", "cacheBustUrl": "…" }`}
+          {" · "}reviews and git are managed above.
         </p>
       </div>
 
