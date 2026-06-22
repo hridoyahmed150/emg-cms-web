@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { GitBranch, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { api, ApiError } from "@/lib/api";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -15,7 +15,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { Job, Paginated } from "@/lib/types";
+import { useActiveOrg } from "@/lib/active-org-context";
+import { PublishButton } from "@/components/publish-button";
+import { getGitConfig, type Job, type Paginated } from "@/lib/types";
+
+type ImportResult = { received: number; inserted: number; skipped: number; note?: string };
 
 const statusVariant: Record<Job["status"], "default" | "secondary" | "outline"> = {
   active: "default",
@@ -24,8 +28,12 @@ const statusVariant: Record<Job["status"], "default" | "secondary" | "outline"> 
 };
 
 export default function JobsPage() {
+  const { activeOrg } = useActiveOrg();
+  const canRepoImport = activeOrg?.deliveryTarget === "ASTRO_PULL" && !!getGitConfig(activeOrg).jobsPath;
+
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
+  const [repoImporting, setRepoImporting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -54,13 +62,41 @@ export default function JobsPage() {
     }
   }
 
+  async function importFromRepo() {
+    if (
+      !window.confirm(
+        "Import the repo's existing jobs.json into the CMS?\n\nBest done during onboarding — before publishing — so pre-existing jobs aren't overwritten. Duplicates (same slug) are skipped.",
+      )
+    )
+      return;
+    setRepoImporting(true);
+    try {
+      const r = await api.post<ImportResult>("/api/v1/jobs/import-from-repo");
+      toast.success(r.note ?? `Imported from repo: ${r.inserted} new, ${r.skipped} duplicate`);
+      await load();
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "Repo import failed");
+    } finally {
+      setRepoImporting(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">Jobs</h1>
-        <Link href="/jobs/new" className={buttonVariants()}>
-          <Plus className="mr-2 size-4" /> New Job
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <PublishButton />
+          {canRepoImport && (
+            <Button variant="outline" onClick={importFromRepo} disabled={repoImporting}>
+              <GitBranch className="mr-2 size-4" />
+              {repoImporting ? "Importing…" : "Import from repo"}
+            </Button>
+          )}
+          <Link href="/jobs/new" className={buttonVariants()}>
+            <Plus className="mr-2 size-4" /> New Job
+          </Link>
+        </div>
       </div>
 
       <div className="rounded-lg border">
