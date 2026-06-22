@@ -42,7 +42,8 @@ export function AppSidebar() {
 
   return (
     <aside className="flex w-60 shrink-0 flex-col border-r bg-card">
-      <div className="border-b p-4">
+      {/* h-14 + px-4 mirrors the Topbar so the sidebar logo's bottom border lines up with the topbar's. */}
+      <div className="flex h-14 items-center border-b px-4">
         {/* Light bg -> dark logo; dark bg -> white logo */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/emg-logo-light.svg" alt="Everyday Media Group" className="h-7 w-auto dark:hidden" />
