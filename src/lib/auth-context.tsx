@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { api, loginRequest, logoutRequest, refreshAccessToken } from "./api";
+import { api, changePasswordRequest, loginRequest, logoutRequest, refreshAccessToken } from "./api";
 import type { Organization, User } from "./types";
 
 interface AuthContextValue {
@@ -10,6 +10,7 @@ interface AuthContextValue {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -59,8 +60,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setOrganization(null);
   }, []);
 
+  const changePassword = useCallback(async (currentPassword: string, newPassword: string) => {
+    const updated = await changePasswordRequest(currentPassword, newPassword);
+    setUser(updated); // mustChangePassword flips to false → clears the first-login gate
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, organization, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, organization, loading, login, logout, changePassword }}>
       {children}
     </AuthContext.Provider>
   );

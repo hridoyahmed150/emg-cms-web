@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import type { FieldDef } from "@/lib/types";
 
 export const selectClass =
-  "h-11 w-full rounded-xl border border-input bg-transparent px-4 text-base outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50 dark:bg-input/30";
+  "cms-select h-11 w-full appearance-none rounded-xl border border-input bg-transparent pl-4 pr-10 text-base outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50 dark:bg-input/30";
 
 type Field = ControllerRenderProps<FieldValues, string>;
 

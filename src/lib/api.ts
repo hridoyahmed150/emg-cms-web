@@ -88,6 +88,22 @@ export async function loginRequest(email: string, password: string): Promise<Use
   return data.user;
 }
 
+/**
+ * Self-service password change. Sends the current access token (auth) and, on success, stores
+ * the fresh access token the server returns (the old refresh token is rotated server-side too),
+ * so the session stays valid. Returns the updated user (mustChangePassword now false).
+ */
+export async function changePasswordRequest(currentPassword: string, newPassword: string): Promise<User> {
+  const res = await rawFetch("/api/v1/auth/change-password", {
+    method: "POST",
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+  if (!res.ok) throw await parseError(res);
+  const data = (await res.json()) as { accessToken: string; user: User };
+  setAccessToken(data.accessToken);
+  return data.user;
+}
+
 export async function logoutRequest(): Promise<void> {
   await rawFetch("/api/v1/auth/logout", { method: "POST" }, false).catch(() => undefined);
   setAccessToken(null);

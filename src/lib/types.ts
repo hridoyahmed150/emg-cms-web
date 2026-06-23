@@ -7,6 +7,7 @@ export interface User {
   name: string;
   role: Role;
   organizationId: number | null;
+  mustChangePassword?: boolean;
   lastLoginAt?: string | null;
   createdAt?: string;
 }
