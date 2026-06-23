@@ -49,6 +49,8 @@ export default function UsersPage() {
   const [tempPassword, setTempPassword] = useState<string | null>(null);
   const [permsFor, setPermsFor] = useState<ApiUser | null>(null);
   const [resetFor, setResetFor] = useState<ApiUser | null>(null);
+  // The invite form is collapsed behind an "Add user" button by default.
+  const [showInvite, setShowInvite] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -122,8 +124,16 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Users</h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold">Users</h1>
+        {!showInvite && (
+          <Button onClick={() => setShowInvite(true)}>
+            <UserPlus className="mr-2 size-4" /> Add user
+          </Button>
+        )}
+      </div>
 
+      {showInvite && (
       <Card>
         <CardHeader>
           <CardTitle>Invite a user</CardTitle>
@@ -153,9 +163,20 @@ export default function UsersPage() {
             Only super admins can create users and choose the organization. A strong temporary password
             is generated if you leave it blank.
           </p>
-          <Button onClick={invite} disabled={creating}>
-            <UserPlus className="mr-2 size-4" /> {creating ? "Inviting…" : "Invite user"}
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={invite} disabled={creating}>
+              <UserPlus className="mr-2 size-4" /> {creating ? "Inviting…" : "Invite user"}
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setShowInvite(false);
+                setTempPassword(null);
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
 
           {tempPassword && (
             <div className="space-y-2 rounded-lg border border-primary/40 bg-primary/5 p-3">
@@ -177,6 +198,7 @@ export default function UsersPage() {
           )}
         </CardContent>
       </Card>
+      )}
 
       <div className="rounded-lg border">
         <Table>
@@ -260,13 +282,14 @@ function ResetPasswordDialog({
   const [busy, setBusy] = useState(false);
   const [tempPassword, setTempPassword] = useState<string | null>(null);
 
-  // Reset local state whenever the dialog target changes (open/close/switch user).
-  useEffect(() => {
+  // Reset the form on close so the next open starts fresh (no stale temp password / mode).
+  function close() {
     setMode("generate");
     setPassword("");
     setBusy(false);
     setTempPassword(null);
-  }, [user]);
+    onClose();
+  }
 
   async function submit() {
     if (!user) return;
@@ -283,7 +306,7 @@ function ResetPasswordDialog({
         toast.success("Temporary password generated.");
       } else {
         toast.success("Password reset. The user must set a new one at next login; their other sessions were signed out.");
-        onClose();
+        close();
       }
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "Reset failed");
@@ -293,7 +316,7 @@ function ResetPasswordDialog({
   }
 
   return (
-    <Dialog open={user != null} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={user != null} onOpenChange={(open) => !open && close()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Reset password — {user?.name}</DialogTitle>
@@ -319,7 +342,7 @@ function ResetPasswordDialog({
                 <Copy className="size-4" />
               </Button>
             </div>
-            <Button className="w-full" onClick={onClose}>
+            <Button className="w-full" onClick={close}>
               Done
             </Button>
           </div>
