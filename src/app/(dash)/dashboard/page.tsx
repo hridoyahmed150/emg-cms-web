@@ -6,7 +6,7 @@ import { BellRing, Briefcase, Gauge, Plus, Send, Star } from "lucide-react";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, XAxis } from "recharts";
 import { api } from "@/lib/api";
 import { useActiveOrg } from "@/lib/active-org-context";
-import { getReviewsConfig } from "@/lib/types";
+import { getReviewsConfig, isFeatureEnabled } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -90,6 +90,10 @@ function reviewsDue(orgs: Organization[]) {
 
 export default function DashboardPage() {
   const { isSuper, orgs, activeOrg } = useActiveOrg();
+  // Show each org only the modules it actually has. Same gate the sidebar uses; a super admin
+  // with no org selected (activeOrg null) sees everything (default-enabled).
+  const jobsEnabled = isFeatureEnabled(activeOrg, "jobs");
+  const reviewsEnabled = isFeatureEnabled(activeOrg, "reviews");
   const dueOrgs = reviewsDue(isSuper ? orgs : activeOrg ? [activeOrg] : []);
 
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -99,25 +103,32 @@ export default function DashboardPage() {
   const [openDeliveries, setOpenDeliveries] = useState(0);
 
   useEffect(() => {
-    api
-      .get<Paginated<Job>>("/api/v1/jobs?limit=100")
-      .then((r) => {
-        setJobs(r.items);
-        setJobsTotal(r.total);
-      })
-      .catch(() => {});
-    api
-      .get<Paginated<Review>>("/api/v1/reviews?limit=100")
-      .then((r) => {
-        setReviews(r.items);
-        setReviewsTotal(r.total);
-      })
-      .catch(() => {});
+    // Only fetch a collection the org has enabled — the API feature-gates these routes (403 otherwise).
+    // Disabled collections are never rendered (and switching org does a full reload), so there's
+    // nothing to reset here.
+    if (jobsEnabled) {
+      api
+        .get<Paginated<Job>>("/api/v1/jobs?limit=100")
+        .then((r) => {
+          setJobs(r.items);
+          setJobsTotal(r.total);
+        })
+        .catch(() => {});
+    }
+    if (reviewsEnabled) {
+      api
+        .get<Paginated<Review>>("/api/v1/reviews?limit=100")
+        .then((r) => {
+          setReviews(r.items);
+          setReviewsTotal(r.total);
+        })
+        .catch(() => {});
+    }
     api
       .get<DeliveryJob[]>("/api/v1/delivery-jobs")
       .then((d) => setOpenDeliveries(d.filter((x) => x.status !== "success").length))
       .catch(() => {});
-  }, []);
+  }, [jobsEnabled, reviewsEnabled]);
 
   const avgRating = reviews.length
     ? (reviews.reduce((s, r) => s + r.rating, 0) / reviews.length).toFixed(1)
@@ -138,17 +149,21 @@ export default function DashboardPage() {
           <h1 className="text-3xl font-bold">Dashboard</h1>
         </div>
         <div className="flex gap-2">
-          <Link href="/jobs/new" className={buttonVariants({ variant: "outline" })}>
-            <Plus className="mr-2 size-4" /> New Job
-          </Link>
-          <Link href="/reviews/new" className={buttonVariants()}>
-            <Plus className="mr-2 size-4" /> New Review
-          </Link>
+          {jobsEnabled && (
+            <Link href="/jobs/new" className={buttonVariants({ variant: "outline" })}>
+              <Plus className="mr-2 size-4" /> New Job
+            </Link>
+          )}
+          {reviewsEnabled && (
+            <Link href="/reviews/new" className={buttonVariants()}>
+              <Plus className="mr-2 size-4" /> New Review
+            </Link>
+          )}
         </div>
       </div>
 
       {/* Reviews refresh reminder (per-company, ~15-day cadence) */}
-      {dueOrgs.length > 0 && (
+      {reviewsEnabled && dueOrgs.length > 0 && (
         <Card className="border-amber-300 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/30">
           <CardContent className="flex flex-wrap items-center gap-3 p-4">
             <BellRing className="size-5 shrink-0 text-amber-600 dark:text-amber-400" />
@@ -163,15 +178,18 @@ export default function DashboardPage() {
         </Card>
       )}
 
-      {/* Stat cards */}
+      {/* Stat cards — only for the modules this org has enabled */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard icon={Briefcase} label="Total Jobs" value={jobsTotal} />
-        <StatCard icon={Star} label="Total Reviews" value={reviewsTotal} />
-        <StatCard icon={Gauge} label="Avg Rating" value={avgRating} hint="across all reviews" />
+        {jobsEnabled && <StatCard icon={Briefcase} label="Total Jobs" value={jobsTotal} />}
+        {reviewsEnabled && <StatCard icon={Star} label="Total Reviews" value={reviewsTotal} />}
+        {reviewsEnabled && (
+          <StatCard icon={Gauge} label="Avg Rating" value={avgRating} hint="across all reviews" />
+        )}
         <StatCard icon={Send} label="Open Deliveries" value={openDeliveries} hint="pending / running / failed" />
       </div>
 
-      {/* Charts */}
+      {/* Charts (reviews) */}
+      {reviewsEnabled && (
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
@@ -219,8 +237,10 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+      )}
 
       {/* Recent jobs */}
+      {jobsEnabled && (
       <Card>
         <CardHeader className="flex-row items-center justify-between">
           <CardTitle>Recent jobs</CardTitle>
@@ -263,6 +283,7 @@ export default function DashboardPage() {
           </Table>
         </CardContent>
       </Card>
+      )}
     </div>
   );
 }
