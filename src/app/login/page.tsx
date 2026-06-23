@@ -111,6 +111,9 @@ export default function LoginPage() {
               <Button type="submit" className="w-full" disabled={submitting}>
                 {submitting ? "Signing in…" : "Sign in"}
               </Button>
+              <p className="text-center text-xs text-muted-foreground">
+                Forgot your password? Contact your administrator to reset it.
+              </p>
             </form>
           </Form>
         </CardContent>

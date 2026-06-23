@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Check, Copy, ShieldCheck, Trash2, UserPlus } from "lucide-react";
+import { Check, Copy, KeyRound, ShieldCheck, Trash2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -47,6 +48,7 @@ export default function UsersPage() {
   const [creating, setCreating] = useState(false);
   const [tempPassword, setTempPassword] = useState<string | null>(null);
   const [permsFor, setPermsFor] = useState<ApiUser | null>(null);
+  const [resetFor, setResetFor] = useState<ApiUser | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -185,7 +187,7 @@ export default function UsersPage() {
               <TableHead>Role</TableHead>
               <TableHead>Organization</TableHead>
               <TableHead>Last login</TableHead>
-              <TableHead className="w-28 text-right">Actions</TableHead>
+              <TableHead className="w-32 text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -215,6 +217,18 @@ export default function UsersPage() {
                     >
                       <ShieldCheck className="size-4" />
                     </Button>
+                    {/* Self-reset goes through Settings (self-service); hide it here for the current user. */}
+                    {u.id !== currentUser?.id && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Reset password"
+                        title="Reset password"
+                        onClick={() => setResetFor(u)}
+                      >
+                        <KeyRound className="size-4" />
+                      </Button>
+                    )}
                     <Button variant="ghost" size="icon" aria-label="Delete" onClick={() => remove(u.id)}>
                       <Trash2 className="size-4" />
                     </Button>
@@ -227,7 +241,134 @@ export default function UsersPage() {
       </div>
 
       <PermissionsDialog user={permsFor} perms={perms} onClose={() => setPermsFor(null)} />
+      <ResetPasswordDialog user={resetFor} onClose={() => setResetFor(null)} onDone={() => void load()} />
     </div>
+  );
+}
+
+function ResetPasswordDialog({
+  user,
+  onClose,
+  onDone,
+}: {
+  user: ApiUser | null;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [mode, setMode] = useState<"generate" | "manual">("generate");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [tempPassword, setTempPassword] = useState<string | null>(null);
+
+  // Reset local state whenever the dialog target changes (open/close/switch user).
+  useEffect(() => {
+    setMode("generate");
+    setPassword("");
+    setBusy(false);
+    setTempPassword(null);
+  }, [user]);
+
+  async function submit() {
+    if (!user) return;
+    if (mode === "manual" && password.length < 10) {
+      return toast.error("Password must be at least 10 characters.");
+    }
+    setBusy(true);
+    try {
+      const body = mode === "manual" ? { password } : {};
+      const res = await api.post<{ tempPassword?: string }>(`/api/v1/users/${user.id}/reset-password`, body);
+      onDone();
+      if (res.tempPassword) {
+        setTempPassword(res.tempPassword);
+        toast.success("Temporary password generated.");
+      } else {
+        toast.success("Password reset. The user must set a new one at next login; their other sessions were signed out.");
+        onClose();
+      }
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "Reset failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog open={user != null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Reset password — {user?.name}</DialogTitle>
+          <DialogDescription>
+            {user?.email}. The user must set their own password at next login, and all their existing
+            sessions will be signed out.
+          </DialogDescription>
+        </DialogHeader>
+
+        {tempPassword ? (
+          <div className="space-y-3 rounded-lg border border-primary/40 bg-primary/5 p-3">
+            <p className="text-sm font-medium">Temporary password (share with the user):</p>
+            <div className="flex gap-2">
+              <code className="flex-1 truncate rounded bg-muted px-2 py-1.5 text-xs">{tempPassword}</code>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => {
+                  void navigator.clipboard.writeText(tempPassword);
+                  toast.success("Copied");
+                }}
+              >
+                <Copy className="size-4" />
+              </Button>
+            </div>
+            <Button className="w-full" onClick={onClose}>
+              Done
+            </Button>
+          </div>
+        ) : mode === "generate" ? (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              A strong temporary password will be generated and shown once.
+            </p>
+            <div className="flex flex-col gap-2">
+              <Button onClick={submit} disabled={busy}>
+                <KeyRound className="mr-2 size-4" /> {busy ? "Generating…" : "Generate temporary password"}
+              </Button>
+              <Button variant="ghost" onClick={() => setMode("manual")}>
+                Set a specific password instead
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>New password</Label>
+              <Input
+                type="password"
+                autoComplete="new-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                At least 10 characters, with 2+ character types (letters, digits, symbols).
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={submit} disabled={busy || password.length < 10}>
+                {busy ? "Setting…" : "Set password"}
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setMode("generate");
+                  setPassword("");
+                }}
+              >
+                Back
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 

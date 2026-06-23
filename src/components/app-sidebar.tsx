@@ -22,9 +22,12 @@ const contentNav = [
   { href: "/reviews", label: "Reviews", icon: Star, feature: "reviews" },
 ];
 
+// SUPER_ADMIN-only. API Tokens lives here: consumer read tokens are an agency-side
+// onboarding concern (issued by EMG for WordPress/external consumers), not a client task.
 const superNav = [
   { href: "/organizations", label: "Organizations", icon: Building2 },
   { href: "/users", label: "Users", icon: Users },
+  { href: "/api-tokens", label: "API Tokens", icon: KeyRound },
 ];
 
 export function AppSidebar() {
@@ -35,7 +38,6 @@ export function AppSidebar() {
   const items = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     ...contentNav.filter((n) => isFeatureEnabled(activeOrg, n.feature)),
-    { href: "/api-tokens", label: "API Tokens", icon: KeyRound },
     { href: "/delivery", label: "Delivery", icon: Send },
     ...(user?.role === "SUPER_ADMIN" ? superNav : []),
   ];
